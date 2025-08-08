@@ -95,3 +95,4 @@ plugins/ragas_examples/*
 langgraph_migration.md
 userinput.py
 CLAUDE.md
+.docs/*
