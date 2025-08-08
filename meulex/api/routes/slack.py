@@ -198,22 +198,31 @@ async def slack_events(request: Request) -> Dict[str, Any]:
             if payload.type == "event_callback":
                 logger.debug(f"Processing event_callback: {payload.event.type if payload.event else 'no event'}")
                 
-                # Send immediate acknowledgment
+                # Send immediate acknowledgment first
                 ack_response = {"status": "ok"}
                 logger.debug("Sending ACK response to Slack")
                 
-                # If we have a response to send, send it asynchronously
+                # If we have a response to send, send it synchronously but with timeout protection
                 if response and payload.event:
-                    logger.debug(f"Scheduling async response to channel {payload.event.channel}")
-                    # Don't await this - send it in the background
-                    import asyncio
-                    asyncio.create_task(
-                        event_processor.send_response(
-                            response,
-                            payload.event.channel,
-                            payload.event.thread_ts
+                    logger.debug(f"Sending response to channel {payload.event.channel}")
+                    try:
+                        # Send response with timeout protection
+                        import asyncio
+                        await asyncio.wait_for(
+                            event_processor.send_response(
+                                response,
+                                payload.event.channel,
+                                payload.event.thread_ts
+                            ),
+                            timeout=2.5  # Leave 0.5s buffer for Slack's 3s timeout
                         )
-                    )
+                        logger.debug("Response sent successfully")
+                    except asyncio.TimeoutError:
+                        logger.warning("Response sending timed out - Slack will retry")
+                        # Still return ACK to prevent Slack retry
+                    except Exception as e:
+                        logger.error(f"Failed to send response: {e}")
+                        # Still return ACK to prevent Slack retry
                 else:
                     logger.debug("No response to send or no event data")
                 

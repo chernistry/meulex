@@ -185,9 +185,14 @@ class SlackEventProcessor:
         if not event.text or not event.user:
             return None
         
-        # Skip bot messages
-        if event.user == self.bot_user_id:
-            logger.debug(f"Ignoring bot message from user {event.user} (bot_user_id: {self.bot_user_id})")
+        # Skip bot messages and messages from the bot itself
+        if event.user == self.bot_user_id or event.bot_id:
+            logger.debug(f"Ignoring bot message from user {event.user} (bot_user_id: {self.bot_user_id}, bot_id: {event.bot_id})")
+            return None
+        
+        # Skip message subtypes that shouldn't trigger responses (like edits, deletes, etc.)
+        if hasattr(event, 'subtype') and event.subtype:
+            logger.debug(f"Ignoring message with subtype: {event.subtype}")
             return None
         
         span.set_attribute("user_id", event.user)
@@ -282,8 +287,12 @@ class SlackEventProcessor:
         if not event.text or not event.user:
             return None
         
-        # Skip bot messages
-        if event.user == self.bot_user_id:
+        # Skip bot messages and messages from the bot itself
+        if event.user == self.bot_user_id or event.bot_id:
+            return None
+        
+        # Skip message subtypes that shouldn't trigger responses
+        if hasattr(event, 'subtype') and event.subtype:
             return None
         
         span.set_attribute("user_id", event.user)
@@ -356,7 +365,7 @@ class SlackEventProcessor:
         channel: str,
         thread_ts: Optional[str] = None
     ) -> bool:
-        """Send response to Slack channel.
+        """Send response to Slack channel with idempotency protection.
         
         Args:
             response: Slack response
@@ -373,6 +382,17 @@ class SlackEventProcessor:
         with tracer.start_as_current_span("slack_send_response") as span:
             span.set_attribute("channel", channel)
             span.set_attribute("has_thread", bool(thread_ts))
+            
+            # Create idempotency key for message sending
+            message_key = f"slack_message:{channel}:{thread_ts or 'no_thread'}:{hash(response.text)}"
+            
+            # Check if we've already sent this exact message
+            if self.cache_manager:
+                already_sent = await self.cache_manager.get(message_key)
+                if already_sent:
+                    logger.info(f"Message already sent to {channel}, skipping duplicate")
+                    span.set_attribute("duplicate_prevented", True)
+                    return True
             
             try:
                 payload = {
@@ -398,6 +418,18 @@ class SlackEventProcessor:
                 if result.get("ok"):
                     logger.info(f"Sent Slack response to {channel}")
                     span.set_attribute("success", True)
+                    
+                    # Cache that we sent this message to prevent duplicates
+                    if self.cache_manager:
+                        try:
+                            await self.cache_manager.set(
+                                message_key,
+                                {"sent_at": time.time()},
+                                ttl=300  # 5 minutes
+                            )
+                        except Exception as e:
+                            logger.warning(f"Failed to cache message send status: {e}")
+                    
                     return True
                 else:
                     error = result.get("error", "Unknown error")
