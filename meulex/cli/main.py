@@ -270,5 +270,45 @@ async def _test_connection_async() -> None:
         typer.echo(f"❌ Embedder connection failed: {e}")
 
 
+@app.command()
+def eval(
+    output_file: Optional[str] = typer.Option(None, "--output", "-o", help="Output file for results"),
+    format: str = typer.Option("json", "--format", "-f", help="Output format (json, pretty)"),
+    use_mock: bool = typer.Option(True, "--mock", help="Use mock providers for evaluation")
+) -> None:
+    """Run RAG evaluation."""
+    import asyncio
+    import json
+    from datetime import datetime
+    
+    from meulex.config.settings import Settings
+    from meulex.eval.simple_eval import run_simple_evaluation, print_evaluation_results
+    
+    async def run_eval():
+        settings = Settings(
+            use_mock_embeddings=use_mock,
+            use_mock_llm=use_mock,
+            enable_sparse_retrieval=True,
+            enable_reranker=False,
+            default_top_k=3
+        )
+        
+        typer.echo("🔍 Starting RAG evaluation...")
+        results = await run_simple_evaluation(settings)
+        
+        if format == "pretty":
+            print_evaluation_results(results)
+        else:
+            # JSON output
+            if output_file:
+                with open(output_file, 'w') as f:
+                    json.dump(results, f, indent=2)
+                typer.echo(f"✅ Results saved to {output_file}")
+            else:
+                typer.echo(json.dumps(results, indent=2))
+    
+    asyncio.run(run_eval())
+
+
 if __name__ == "__main__":
     app()

@@ -8,7 +8,7 @@ from typing import Dict, Optional
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from meulex.config.settings import Settings
+from meulex.config.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Middleware to add comprehensive security headers."""
     
-    def __init__(self, app, settings: Settings):
+    def __init__(self, app, settings: Settings = None):
         """Initialize security headers middleware.
         
         Args:
@@ -24,7 +24,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             settings: Application settings
         """
         super().__init__(app)
-        self.settings = settings
+        self.settings = settings or get_settings()
     
     async def dispatch(self, request: Request, call_next):
         """Add security headers to all responses.
@@ -64,7 +64,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         
         # Remove server information
-        response.headers.pop("server", None)
+        if "server" in response.headers:
+            del response.headers["server"]
         
         return response
 
@@ -72,7 +73,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Simple in-memory rate limiting middleware."""
     
-    def __init__(self, app, settings: Settings):
+    def __init__(self, app, settings: Settings = None):
         """Initialize rate limiting middleware.
         
         Args:
@@ -80,7 +81,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             settings: Application settings
         """
         super().__init__(app)
-        self.settings = settings
+        self.settings = settings or get_settings()
         self.enabled = settings.enable_rate_limiting
         
         # Rate limit configurations per endpoint
@@ -236,7 +237,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 class LogSanitizerMiddleware(BaseHTTPMiddleware):
     """Middleware to sanitize sensitive information from logs."""
     
-    def __init__(self, app, settings: Settings):
+    def __init__(self, app, settings: Settings = None):
         """Initialize log sanitizer middleware.
         
         Args:
@@ -244,7 +245,7 @@ class LogSanitizerMiddleware(BaseHTTPMiddleware):
             settings: Application settings
         """
         super().__init__(app)
-        self.settings = settings
+        self.settings = settings or get_settings()
         
         # Patterns to sanitize from logs
         self.sensitive_patterns = [

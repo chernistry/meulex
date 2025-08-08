@@ -1,50 +1,100 @@
 version: '3.8'
 
 services:
+  # Meulex API Service
+  meulex-api:
+    build:
+      context: .
+      target: production
+    ports:
+      - "8000:8000"
+    environment:
+      # Core settings
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=production
+      
+      # Database connections
+      - QDRANT_URL=http://qdrant:6333
+      - REDIS_URL=redis://redis:6379
+      
+      # Enable features
+      - ENABLE_CACHE=true
+      - ENABLE_SPARSE_RETRIEVAL=true
+      - ENABLE_RERANKER=true
+      - ENABLE_RATE_LIMITING=true
+      - ENABLE_SECURITY_HEADERS=true
+      - ENABLE_LOG_SANITIZATION=true
+      
+      # Mock providers for demo (replace with real keys)
+      - USE_MOCK_EMBEDDINGS=true
+      - USE_MOCK_LLM=true
+      
+      # Uncomment and set for production
+      # - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # - JINA_API_KEY=${JINA_API_KEY}
+      # - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      # - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
+      # - METRICS_TOKEN=${METRICS_TOKEN}
+    
+    depends_on:
+      - qdrant
+      - redis
+    
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Qdrant Vector Database
   qdrant:
     image: qdrant/qdrant:v1.7.0
-    container_name: meulex-qdrant
     ports:
       - "6333:6333"
       - "6334:6334"
     volumes:
-      - qdrant_storage:/qdrant/storage
+      - qdrant_data:/qdrant/storage
     environment:
       - QDRANT__SERVICE__HTTP_PORT=6333
       - QDRANT__SERVICE__GRPC_PORT=6334
+    restart: unless-stopped
+    
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
-    networks:
-      - meulex-network
 
+  # Redis Cache
   redis:
-    image: redis:7.2-alpine
-    container_name: meulex-redis
+    image: redis:7-alpine
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
-    networks:
-      - meulex-network
 
+  # Prometheus (Optional - for metrics collection)
   prometheus:
-    image: prom/prometheus:v2.48.0
-    container_name: meulex-prometheus
+    image: prom/prometheus:latest
     ports:
       - "9090:9090"
     volumes:
-      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -53,72 +103,49 @@ services:
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    networks:
-      - meulex-network
-    profiles:
-      - observability
+    restart: unless-stopped
+    profiles: ["monitoring"]
 
-  langfuse:
-    image: langfuse/langfuse:2
-    container_name: meulex-langfuse
+  # Grafana (Optional - for metrics visualization)
+  grafana:
+    image: grafana/grafana:latest
     ports:
       - "3000:3000"
-    environment:
-      - DATABASE_URL=postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
-      - NEXTAUTH_SECRET=mysecret
-      - SALT=mysalt
-      - NEXTAUTH_URL=http://localhost:3000
-      - TELEMETRY_ENABLED=false
-    depends_on:
-      langfuse-db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/public/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    networks:
-      - meulex-network
-    profiles:
-      - observability
-
-  langfuse-db:
-    image: postgres:15
-    container_name: meulex-langfuse-db
-    environment:
-      - POSTGRES_USER=langfuse
-      - POSTGRES_PASSWORD=langfuse
-      - POSTGRES_DB=langfuse
     volumes:
-      - langfuse_db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U langfuse -d langfuse"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    networks:
-      - meulex-network
-    profiles:
-      - observability
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    depends_on:
+      - prometheus
+
+  # Nginx (Optional - reverse proxy)
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - meulex-api
+    restart: unless-stopped
+    profiles: ["proxy"]
 
 volumes:
-  qdrant_storage:
+  qdrant_data:
     driver: local
   redis_data:
     driver: local
   prometheus_data:
     driver: local
-  langfuse_db_data:
+  grafana_data:
     driver: local
 
 networks:
-  meulex-network:
-    driver: bridge
+  default:
+    name: meulex-network

@@ -220,13 +220,13 @@ app = FastAPI(
 
 # Add security middleware
 if settings.enable_log_sanitization:
-    app.add_middleware(LogSanitizerMiddleware, settings=settings)
+    app.add_middleware(LogSanitizerMiddleware)
 
 if settings.enable_rate_limiting:
-    app.add_middleware(RateLimitMiddleware, settings=settings)
+    app.add_middleware(RateLimitMiddleware)
 
 if settings.enable_security_headers:
-    app.add_middleware(SecurityHeadersMiddleware, settings=settings)
+    app.add_middleware(SecurityHeadersMiddleware)
 
 # Add CORS middleware
 app.add_middleware(
