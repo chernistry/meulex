@@ -244,9 +244,11 @@ You can ingest files in three ways. Pick what fits your setup.
 1) Via API (no container access required)
 
 ```bash
-for f in /Users/sasha/IdeaProjects/meulex/test_data/*; do \
+DATA_DIR=${DATA_DIR:-./test_data}
+MEULEX_BASE_URL=${MEULEX_BASE_URL:-http://localhost:8000}
+for f in "$DATA_DIR"/*; do \
   jq -Rs --arg id "$(basename "$f")" '{id:$id, content:., metadata:{source:$id}}' "$f" \
-  | curl -sS -X POST http://localhost:8000/embed \
+  | curl -sS -X POST "$MEULEX_BASE_URL/embed" \
     -H 'Content-Type: application/json' -d @-; echo; \
 done
 ```
@@ -254,15 +256,17 @@ done
 2) CLI from host (when Qdrant port is reachable)
 
 ```bash
-export QDRANT_URL=http://localhost:6333
-meulex ingest_directory /Users/sasha/IdeaProjects/meulex/test_data --collection meulex_docs
+export QDRANT_URL=${QDRANT_URL:-http://localhost:6333}
+DATA_DIR=${DATA_DIR:-./test_data}
+meulex ingest_directory "$DATA_DIR" --collection meulex_docs
 ```
 
 3) Inside container (service `meulex-api`)
 
 ```bash
 CID=$(docker compose ps -q meulex-api)
-docker cp /Users/sasha/IdeaProjects/meulex/test_data "$CID":/app/test_data
+DATA_DIR=${DATA_DIR:-./test_data}
+docker cp "$DATA_DIR" "$CID":/app/test_data
 docker compose exec meulex-api sh -lc \
   "python -m meulex.cli.main ingest_directory /app/test_data --collection meulex_docs"
 ```
