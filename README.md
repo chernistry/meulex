@@ -72,6 +72,90 @@ flowchart LR
   LLM-->Response
 ```
 
+### System Architecture (Mermaid)
+
+```mermaid
+graph TD
+    subgraph Client_Layer
+        SLACK[Slack users]
+        API_CLIENTS[API clients]
+    end
+
+    subgraph API_Layer
+        ROUTES[Routes: /chat, /embed, /slack/events, /health, /metrics]
+        RL[Rate limiting]
+        VAL[Request validation]
+        SEC[Security headers]
+    end
+
+    subgraph Processing_Layer
+        RETR[Hybrid retrieval]
+        RRF[Fusion RRF]
+        RER[Reranker optional]
+        PROMPT[Prompt builder]
+        LLM[LLM cascade primary and fallback]
+    end
+
+    subgraph Data_Layer
+        QDRANT[Qdrant vector DB]
+        REDIS[Redis cache]
+        EMBED[Jina embeddings]
+    end
+
+    subgraph Observability
+        METRICS[Prometheus metrics]
+        TRACING[OpenTelemetry tracing]
+        LOGS[Structured logs]
+    end
+
+    SLACK --> ROUTES
+    API_CLIENTS --> ROUTES
+    ROUTES --> RL
+    RL --> VAL
+    VAL --> SEC
+    SEC --> RETR
+    RETR --> RRF
+    RRF --> RER
+    RER --> PROMPT
+    PROMPT --> LLM
+    RETR --> QDRANT
+    RETR --> REDIS
+    RETR --> EMBED
+    ROUTES --> METRICS
+    ROUTES --> TRACING
+    ROUTES --> LOGS
+```
+
+### RAG Pipeline (Detailed)
+
+```mermaid
+graph TD
+    START[Query input] --> VALIDATE[Validate and sanitize]
+    VALIDATE --> CACHE{Semantic cache hit?}
+    CACHE -->|Yes| RETURN[Return cached answer]
+    CACHE -->|No| EMBEDQ[Embed query]
+    EMBEDQ --> HYBRID[Hybrid retrieval]
+    subgraph Retrieval
+        DENSE[Dense search Qdrant]
+        SPARSE[Sparse search BM25]
+        FUSE[RRF fusion]
+    end
+    HYBRID --> DENSE
+    HYBRID --> SPARSE
+    DENSE --> FUSE
+    SPARSE --> FUSE
+    FUSE --> RERANK{Reranker enabled?}
+    RERANK -->|Yes| RER[Rerank Top K]
+    RERANK -->|No| SELECT[Select Top K]
+    RER --> SELECT
+    SELECT --> PROMPT[Assemble context and prompt]
+    PROMPT --> GEN[LLM cascade generate]
+    GEN --> STORE[Store in cache]
+    STORE --> METRICS[Update metrics]
+    METRICS --> END[Return answer and citations]
+    RETURN --> END
+```
+
 ### Core Components
 
 - API (FastAPI): routing, validation, rate limiting, security headers, metrics.
@@ -149,6 +233,8 @@ meulex ingest_file ./test_data/doc1.md
 meulex ingest_directory ./test_data/
 ```
 
+> Slack setup: see detailed step-by-step guide in `docs/setup_slack.md`.
+
 ### CLI (Typer)
 
 ```bash
@@ -220,6 +306,33 @@ Prometheus exposition; optionally token‑guarded.
 ### POST /slack/events
 
 Slack Events API endpoint; verifies signature/timestamp; idempotent handling.
+
+#### Slack Events Flow (Sequence)
+
+```mermaid
+sequenceDiagram
+    participant Slack
+    participant API as FastAPI /slack/events
+    participant AUTH as SignatureVerifier
+    participant PROC as SlackEventProcessor
+    participant CHAT as Chat Handler
+    participant RET as Hybrid Retriever
+    participant LLM as LLM Cascade
+    participant WEB as Slack Web API
+
+    Slack->>API: POST /slack/events (event)
+    API->>AUTH: Verify X-Slack-Signature + Timestamp
+    AUTH-->>API: OK
+    API->>PROC: Parse & route event
+    PROC->>CHAT: question
+    CHAT->>RET: retrieve(query, top_k)
+    RET-->>CHAT: documents
+    CHAT->>LLM: generate(messages)
+    LLM-->>CHAT: answer + citations
+    API-->>Slack: 200 OK (ack within ≤3s)
+    PROC->>WEB: chat.postMessage(response)
+    WEB-->>PROC: ok
+```
 
 ---
 

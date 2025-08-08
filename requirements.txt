@@ -1,0 +1,37 @@
+# Core web framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.17
+jinja2>=3.1.4
+
+# Data validation and settings
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+
+# HTTP client
+httpx>=0.28.0
+
+# Database and caching
+redis>=5.2.0
+qdrant-client>=1.15.0
+
+# LLM providers
+openai>=1.58.0
+
+# Utilities
+tenacity>=9.0.0
+typer>=0.15.0
+rich>=13.9.0
+
+# Monitoring and observability
+prometheus-client>=0.21.0
+opentelemetry-api>=1.36.0
+opentelemetry-sdk>=1.36.0
+opentelemetry-instrumentation-fastapi>=0.47b0
+opentelemetry-instrumentation-httpx>=0.47b0
+opentelemetry-instrumentation-redis>=0.47b0
+opentelemetry-exporter-prometheus>=0.47b0
+
+# Scientific computing
+numpy>=2.0.0
+scikit-learn>=1.5.0

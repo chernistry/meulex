@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     
     # Fallback LLM Provider
     fallback_llm_provider: str = Field(
-        default="ollama", description="Fallback LLM provider"
+        default="mock", description="Fallback LLM provider"
     )
     fallback_llm_model: str = Field(
         default="llama2", description="Fallback LLM model"
@@ -221,6 +221,7 @@ class Settings(BaseSettings):
     slack_bot_token: Optional[str] = Field(None, description="Slack bot token")
     slack_signing_secret: Optional[str] = Field(None, description="Slack signing secret")
     slack_bot_user_id: Optional[str] = Field(None, description="Slack bot user ID")
+    slack_signature_verification_enabled: bool = Field(default=True, description="Enable Slack signature verification")
     
     # =============================================================================
     # Feature Flags

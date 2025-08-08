@@ -14,6 +14,7 @@ from meulex.core.vector.qdrant_store import QdrantStore
 from meulex.integrations.slack.auth import SlackSignatureVerifier
 from meulex.integrations.slack.models import SlackEventPayload
 from meulex.integrations.slack.processor import SlackEventProcessor
+from meulex.llm.base import LLMMode
 from meulex.llm.cascade import LLMCascade
 from meulex.llm.prompt_builder import RAGPromptBuilder
 from meulex.observability import SLACK_EVENTS, get_tracer
@@ -84,7 +85,7 @@ async def handle_chat_query(question: str) -> Dict[str, Any]:
         question=question,
         documents=documents,
         conversation_history=None,  # No history for Slack
-        mode="balanced"
+        mode=LLMMode.BALANCED
     )
     
     # Generate response
