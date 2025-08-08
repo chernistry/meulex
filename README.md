@@ -134,6 +134,21 @@ Verify:
 curl -s http://localhost:8000/health | jq .
 ```
 
+### Alternative Quick Start (CLI)
+
+```bash
+# Install (editable) and start infra
+pip install -e .
+docker compose up -d
+
+# Start API via CLI
+meulex api --host 0.0.0.0 --port 8000
+
+# Ingest content
+meulex ingest_file ./test_data/doc1.md
+meulex ingest_directory ./test_data/
+```
+
 ### CLI (Typer)
 
 ```bash
@@ -145,6 +160,19 @@ python -m meulex.cli.main api start --host 0.0.0.0 --port 8000
 ---
 
 ## API Reference (excerpt)
+
+### Endpoints and default rate limits
+
+| Endpoint | Method | Description | Default limit* |
+|----------|--------|-------------|----------------|
+| `/health` | GET | Health check | none |
+| `/info` | GET | Service information | 60/min |
+| `/metrics` | GET | Prometheus metrics | token‑guarded |
+| `/embed` | POST | Document ingestion | 20/min |
+| `/chat` | POST | RAG chat completion | 10/min |
+| `/slack/events` | POST | Slack Events API | 100/min |
+
+*Actual limits are configurable via settings.
 
 ### POST /chat
 
@@ -272,6 +300,48 @@ EMBEDDER_NAME=jina
 VECTOR_STORE=qdrant
 ```
 
+### Environment variables (extended)
+
+```bash
+# Core
+LOG_LEVEL=INFO
+ENVIRONMENT=development
+
+# LLM
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+FALLBACK_LLM_PROVIDER=ollama
+TEMPERATURE=0.7
+
+# Embeddings
+EMBEDDER_NAME=jina
+JINA_API_KEY=jina_...
+
+# Vector DB
+QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=
+
+# Caching
+ENABLE_CACHE=true
+REDIS_URL=redis://localhost:6379
+
+# Retrieval
+ENABLE_SPARSE_RETRIEVAL=true
+ENABLE_RERANKER=false
+DEFAULT_TOP_K=3
+
+# Security
+ENABLE_RATE_LIMITING=true
+ENABLE_SECURITY_HEADERS=true
+ENABLE_LOG_SANITIZATION=true
+METRICS_TOKEN=
+
+# Slack
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_SIGNING_SECRET=...
+SLACK_BOT_USER_ID=U123...
+```
+
 ---
 
 ## Testing
@@ -290,6 +360,19 @@ What to expect:
 
 Quality:
 - 88‑char line length; ≥85% type hints on public APIs; Google‑style docstrings.
+
+### Evaluation (CLI)
+
+```bash
+# Human‑readable output
+meulex eval --format pretty
+
+# Save JSON results
+meulex eval --output results.json
+
+# Use real providers (requires API keys)
+meulex eval --mock false
+```
 
 ---
 
@@ -316,6 +399,81 @@ meulex/
 ```
 
 ---
+
+## Deployment
+
+### Docker
+
+```bash
+# Build image
+docker build -t meulex:latest .
+
+# Run with compose
+docker compose up -d
+
+# Scale API
+docker compose up -d --scale api=3
+```
+
+### Kubernetes (example)
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meulex-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: meulex-api
+  template:
+    metadata:
+      labels:
+        app: meulex-api
+    spec:
+      containers:
+      - name: meulex
+        image: meulex:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: REDIS_URL
+          value: "redis://redis-service:6379"
+        - name: QDRANT_URL
+          value: "http://qdrant-service:6333"
+```
+
+### Production checklist
+
+- [ ] Configure real API keys (OpenAI/Jina)
+- [ ] Redis for distributed cache
+- [ ] Prometheus scraping and dashboards
+- [ ] Log aggregation (ELK/Datadog)
+- [ ] Reverse proxy + TLS
+- [ ] Vector data backup strategy
+- [ ] Alerts for critical metrics
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new functionality
+4. Ensure all tests pass
+5. Update documentation
+6. Open a pull request
+
+---
+
+## Additional Resources
+
+- LangGraph, LangChain, Qdrant, FastAPI (see their docs)
+- Local links when running:
+  - API Docs: http://localhost:8000/docs
+  - Metrics: http://localhost:8000/metrics
+  - Health: http://localhost:8000/health
 
 ## Roadmap (v2+)
 
