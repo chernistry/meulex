@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 
 from meulex.config.settings import Settings
 from meulex.core.embeddings.base import BaseEmbedder
+from meulex.core.reranking.factory import create_reranker
 from meulex.core.retrieval.dense import DenseRetriever
 from meulex.core.retrieval.sparse import BM25Retriever
 from meulex.core.vector.base import Document, VectorStore
@@ -41,6 +42,11 @@ class HybridRetriever:
         if settings.enable_sparse_retrieval:
             self.sparse_retriever = BM25Retriever(settings)
             logger.info("Sparse retrieval enabled")
+        
+        # Initialize reranker if enabled
+        self.reranker = create_reranker(settings)
+        if self.reranker:
+            logger.info(f"Reranker enabled: {self.reranker.name}")
         
         # RRF parameters
         self.rrf_k = settings.rrf_k
@@ -215,6 +221,18 @@ class HybridRetriever:
                 # Limit to requested top_k
                 results = results[:top_k]
                 
+                # Apply reranking if enabled
+                if self.reranker:
+                    try:
+                        results = await self.reranker.rerank(
+                            query=query,
+                            documents=results,
+                            top_k=top_k
+                        )
+                        logger.info(f"Applied reranking with {self.reranker.name}")
+                    except Exception as e:
+                        logger.warning(f"Reranking failed, using original results: {e}")
+                
                 # Record metrics
                 DOCUMENTS_RETRIEVED.labels(strategy="hybrid").inc(len(results))
                 
@@ -253,6 +271,7 @@ class HybridRetriever:
                 "vector_store": type(self.dense_retriever.vector_store).__name__
             },
             "sparse_retriever": None,
+            "reranker": self.reranker.name if self.reranker else None,
             "fusion": {
                 "rrf_k": self.rrf_k,
                 "dense_weight": self.dense_weight,
@@ -269,6 +288,8 @@ class HybridRetriever:
         """Close the hybrid retriever."""
         try:
             await self.dense_retriever.close()
+            if self.reranker:
+                await self.reranker.close()
             logger.info("Hybrid retriever closed")
         except Exception as e:
             logger.warning(f"Error closing hybrid retriever: {e}")

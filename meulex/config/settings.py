@@ -208,8 +208,18 @@ class Settings(BaseSettings):
     )
     
     # =============================================================================
+    # Slack Integration
+    # =============================================================================
+    slack_bot_token: Optional[str] = Field(None, description="Slack bot token")
+    slack_signing_secret: Optional[str] = Field(None, description="Slack signing secret")
+    slack_bot_user_id: Optional[str] = Field(None, description="Slack bot user ID")
+    
+    # =============================================================================
     # Feature Flags
     # =============================================================================
+    enable_reranker: bool = Field(default=False, description="Enable reranking")
+    reranker_name: str = Field(default="keyword", description="Reranker to use")
+    use_mock_reranker: bool = Field(default=False, description="Use mock reranker")
     enable_streaming: bool = Field(default=False, description="Enable streaming")
     enable_pii_masking: bool = Field(default=True, description="Enable PII masking")
     enable_circuit_breaker: bool = Field(

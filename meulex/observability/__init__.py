@@ -12,6 +12,7 @@ from .otel import (
     RAG_REQUEST_DURATION,
     REQUEST_COUNT,
     REQUEST_DURATION,
+    SLACK_EVENTS,
     get_meter,
     get_tracer,
     instrument_fastapi,
@@ -36,4 +37,5 @@ __all__ = [
     "CIRCUIT_BREAKER_STATE",
     "RAG_REQUESTS",
     "RAG_REQUEST_DURATION",
+    "SLACK_EVENTS",
 ]

@@ -84,6 +84,13 @@ RAG_REQUEST_DURATION = Histogram(
     buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0]
 )
 
+# Slack metrics
+SLACK_EVENTS = Counter(
+    "meulex_slack_events_total",
+    "Total number of Slack events processed",
+    ["event_type", "status"]
+)
+
 
 def setup_tracing(
     service_name: str = "meulex",

@@ -169,6 +169,18 @@ class BudgetExceededError(MeulexException):
         )
 
 
+class SlackError(MeulexException):
+    """Slack integration error."""
+    
+    def __init__(
+        self,
+        message: str,
+        service: str = "slack",
+        details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(message, "SLACK_ERROR", service, details)
+
+
 class CircuitBreakerOpenError(MeulexException):
     """Circuit breaker open error."""
     

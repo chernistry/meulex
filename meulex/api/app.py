@@ -229,8 +229,10 @@ app.add_middleware(RateLimitMiddleware, redis_client=redis_client)
 # Include API routes
 from meulex.api.routes.embed import router as embed_router
 from meulex.api.routes.chat import router as chat_router
+from meulex.api.routes.slack import router as slack_router
 app.include_router(embed_router)
 app.include_router(chat_router)
+app.include_router(slack_router)
 
 # Instrument with OpenTelemetry
 if settings.tracing_enabled:
