@@ -79,27 +79,12 @@ class QdrantStore(VectorStore):
                     logger.info(f"Collection {self.collection_name} already exists")
                     return True
                 
-                # Create collection
+                # Create collection with minimal configuration
                 self.client.create_collection(
                     collection_name=self.collection_name,
                     vectors_config=models.VectorParams(
                         size=self.vector_size,
                         distance=models.Distance.COSINE
-                    ),
-                    optimizers_config=models.OptimizersConfig(
-                        default_segment_number=2,
-                        max_segment_size=None,
-                        memmap_threshold=None,
-                        indexing_threshold=20000,
-                        flush_interval_sec=5,
-                        max_optimization_threads=1
-                    ),
-                    hnsw_config=models.HnswConfig(
-                        m=16,
-                        ef_construct=100,
-                        full_scan_threshold=10000,
-                        max_indexing_threads=0,
-                        on_disk=False
                     )
                 )
                 
@@ -173,18 +158,23 @@ class QdrantStore(VectorStore):
             try:
                 # Prepare points
                 points = []
+                actual_ids = []
                 for i, (text, embedding, metadata, doc_id) in enumerate(
                     zip(texts_list, embeddings, metadatas, ids)
                 ):
                     payload = {
                         "content": text,
                         "metadata": metadata,
+                        "original_id": doc_id,  # Store original ID in payload
                         **metadata  # Flatten metadata for easier filtering
                     }
                     
+                    point_id = i  # Use integer ID
+                    actual_ids.append(str(point_id))  # Return as string for consistency
+                    
                     points.append(
                         models.PointStruct(
-                            id=doc_id,
+                            id=point_id,
                             vector=embedding,
                             payload=payload
                         )
@@ -193,16 +183,17 @@ class QdrantStore(VectorStore):
                 # Upsert points
                 self.client.upsert(
                     collection_name=self.collection_name,
-                    points=points
+                    points=points,
+                    wait=True
                 )
                 
                 logger.info(
                     f"Added {num_docs} documents to {self.collection_name}",
-                    extra={"document_ids": ids[:5]}  # Log first 5 IDs
+                    extra={"document_ids": actual_ids[:5]}  # Log first 5 IDs
                 )
                 
                 span.set_attribute("success", True)
-                return ids
+                return actual_ids
                 
             except Exception as e:
                 logger.error(f"Failed to add embeddings: {e}")

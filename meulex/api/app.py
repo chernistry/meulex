@@ -226,6 +226,10 @@ app.add_middleware(
 app.add_middleware(RequestMiddleware)
 app.add_middleware(RateLimitMiddleware, redis_client=redis_client)
 
+# Include API routes
+from meulex.api.routes.embed import router as embed_router
+app.include_router(embed_router)
+
 # Instrument with OpenTelemetry
 if settings.tracing_enabled:
     instrument_fastapi(app)

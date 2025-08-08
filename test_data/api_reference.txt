@@ -1,0 +1,135 @@
+MEULEX API REFERENCE
+
+BASE URL: http://localhost:8000
+
+AUTHENTICATION
+All API endpoints support optional authentication via Bearer tokens.
+Header: Authorization: Bearer <token>
+
+HEALTH ENDPOINTS
+
+GET /health
+Returns basic health status
+Response: {"status": "ok", "timestamp": 1234567890, "version": "0.1.0", "service": "meulex"}
+
+GET /health/ready
+Returns readiness status with dependency checks
+Response: {"status": "ok", "timestamp": 1234567890, "checks": {"redis": "ok", "qdrant": "ok"}}
+
+GET /health/live
+Returns liveness status
+Response: {"status": "ok", "timestamp": 1234567890}
+
+INFORMATION ENDPOINTS
+
+GET /info
+Returns service information and feature flags
+Response: {
+  "service": "meulex",
+  "version": "0.1.0",
+  "environment": "development",
+  "features": {
+    "hybrid_retrieval": true,
+    "reranker": false,
+    "streaming": false,
+    "metrics": true,
+    "tracing": true
+  },
+  "providers": {
+    "llm": "openai",
+    "embeddings": "jina",
+    "vector_store": "qdrant"
+  }
+}
+
+GET /metrics
+Returns Prometheus metrics (may require authentication)
+Response: Prometheus exposition format
+
+DOCUMENT ENDPOINTS
+
+POST /embed
+Ingest a single document
+Request: {
+  "id": "optional-doc-id",
+  "content": "Document content to embed",
+  "metadata": {"key": "value"}
+}
+Response: {
+  "status": "ok",
+  "count": 3,
+  "ids": ["doc_abc123_chunk_0", "doc_abc123_chunk_1", "doc_abc123_chunk_2"]
+}
+
+POST /chat
+Query the knowledge base
+Request: {
+  "question": "What is Meulex?",
+  "history": [{"role": "user", "content": "Previous message"}],
+  "top_k": 3,
+  "temperature": 0.7
+}
+Response: {
+  "answer": "Meulex is an AI-powered assistant...",
+  "sources": [
+    {
+      "text": "Relevant document excerpt",
+      "source": "document.md",
+      "score": 0.95,
+      "metadata": {"chunk_id": "doc_abc123_chunk_0"}
+    }
+  ],
+  "metadata": {
+    "query_id": "query_xyz789",
+    "processing_time": 1.23,
+    "model_used": "gpt-3.5-turbo",
+    "retrieval_stats": {"documents_found": 5, "reranked": false},
+    "success": true
+  }
+}
+
+SLACK ENDPOINTS
+
+POST /slack/events
+Handle Slack events (requires signature verification)
+Request: Slack Events API payload
+Response: HTTP 200 with acknowledgment
+
+ERROR RESPONSES
+
+All endpoints return errors in a consistent format:
+{
+  "error_code": "VALIDATION_ERROR",
+  "message": "Human-readable error message",
+  "status_code": 422,
+  "details": {"field": "Additional error context"},
+  "request_id": "req_abc123"
+}
+
+Common error codes:
+- VALIDATION_ERROR (422): Invalid request data
+- AUTHENTICATION_ERROR (401): Missing or invalid authentication
+- AUTHORIZATION_ERROR (403): Insufficient permissions
+- RATE_LIMIT_ERROR (429): Too many requests
+- EXTERNAL_SERVICE_ERROR (502): Upstream service failure
+- INTERNAL_ERROR (500): Unexpected server error
+
+RATE LIMITS
+
+Default rate limits:
+- 60 requests per minute per IP
+- Burst limit of 10 requests
+- Stricter limits on /chat endpoint
+
+Rate limit headers:
+- X-RateLimit-Limit: Maximum requests per window
+- X-RateLimit-Remaining: Remaining requests in current window
+- X-RateLimit-Reset: Time when the rate limit resets
+
+RESPONSE HEADERS
+
+All responses include:
+- X-Request-ID: Unique request identifier
+- X-Content-Type-Options: nosniff
+- X-Frame-Options: DENY
+- Content-Security-Policy: Restrictive CSP header
