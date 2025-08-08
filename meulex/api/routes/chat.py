@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, validator
 
 from meulex.config.settings import get_settings
+from meulex.core.caching.cache_manager import CacheManager
 from meulex.core.embeddings.factory import create_embedder
 from meulex.core.retrieval.hybrid import HybridRetriever
 from meulex.core.vector.base import Document
@@ -31,6 +32,7 @@ vector_store = None
 retriever = None
 llm_cascade = None
 prompt_builder = None
+cache_manager = None
 
 
 class ChatMessage(BaseModel):
@@ -104,10 +106,13 @@ class ChatResponse(BaseModel):
 
 async def initialize_chat_components():
     """Initialize components for chat endpoint."""
-    global embedder, vector_store, retriever, llm_cascade, prompt_builder
+    global embedder, vector_store, retriever, llm_cascade, prompt_builder, cache_manager
     
     if retriever is None:
         settings = get_settings()
+        
+        # Initialize cache manager
+        cache_manager = CacheManager(settings)
         
         # Initialize embedder and vector store
         embedder = create_embedder(settings)
@@ -136,7 +141,7 @@ async def initialize_chat_components():
         # Initialize prompt builder
         prompt_builder = RAGPromptBuilder(max_context_tokens=settings.max_tokens // 2)
         
-        logger.info("Chat endpoint components initialized with hybrid retrieval and LLM cascade")
+        logger.info("Chat endpoint components initialized with hybrid retrieval, LLM cascade, and caching")
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -171,6 +176,42 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
             span.set_attribute("top_k", top_k)
             span.set_attribute("temperature", temperature)
             span.set_attribute("mode", mode.value)
+            
+            # Check cache first
+            cache_key = None
+            cached_response = None
+            
+            if cache_manager and cache_manager.enabled:
+                cache_key = cache_manager.generate_semantic_cache_key(
+                    question=request.question,
+                    top_k=top_k,
+                    mode=mode.value,
+                    provider=settings.llm_provider
+                )
+                
+                cached_response = await cache_manager.get(cache_key)
+                
+                if cached_response:
+                    # Return cached response
+                    processing_time = time.time() - start_time
+                    cached_response["metadata"]["processing_time"] = round(processing_time, 3)
+                    cached_response["metadata"]["cached"] = True
+                    
+                    logger.info(
+                        f"Returned cached response for query",
+                        extra={
+                            "request_id": request_id,
+                            "cache_key": cache_key,
+                            "processing_time": processing_time
+                        }
+                    )
+                    
+                    span.set_attribute("cached", True)
+                    span.set_attribute("processing_time", processing_time)
+                    
+                    return ChatResponse(**cached_response)
+            
+            span.set_attribute("cached", False)
             
             # Retrieve relevant documents
             documents = await retriever.retrieve(
@@ -250,6 +291,17 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
                 metadata=metadata
             )
             
+            # Cache the response
+            if cache_manager and cache_manager.enabled and cache_key:
+                try:
+                    await cache_manager.set(
+                        cache_key,
+                        response.dict(),
+                        ttl=cache_manager.semantic_ttl
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to cache response: {e}")
+            
             # Record metrics
             RAG_REQUESTS.labels(
                 status="success",
@@ -299,9 +351,11 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
 
 async def cleanup_chat_components():
     """Cleanup chat endpoint components."""
-    global embedder, vector_store, retriever, llm_cascade, prompt_builder
+    global embedder, vector_store, retriever, llm_cascade, prompt_builder, cache_manager
     
     try:
+        if cache_manager:
+            await cache_manager.close()
         if llm_cascade:
             await llm_cascade.close()
         if retriever:
