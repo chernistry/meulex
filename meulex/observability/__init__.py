@@ -1,0 +1,39 @@
+"""Observability module for Meulex."""
+
+from .otel import (
+    CACHE_HITS,
+    CIRCUIT_BREAKER_STATE,
+    DOCUMENTS_RETRIEVED,
+    EMBEDDINGS_GENERATED,
+    LLM_COST,
+    LLM_FAILURES,
+    LLM_TOKENS,
+    RAG_REQUESTS,
+    RAG_REQUEST_DURATION,
+    REQUEST_COUNT,
+    REQUEST_DURATION,
+    get_meter,
+    get_tracer,
+    instrument_fastapi,
+    instrument_httpx,
+    setup_observability,
+)
+
+__all__ = [
+    "setup_observability",
+    "instrument_fastapi",
+    "instrument_httpx",
+    "get_tracer",
+    "get_meter",
+    "REQUEST_COUNT",
+    "REQUEST_DURATION",
+    "CACHE_HITS",
+    "EMBEDDINGS_GENERATED",
+    "DOCUMENTS_RETRIEVED",
+    "LLM_TOKENS",
+    "LLM_COST",
+    "LLM_FAILURES",
+    "CIRCUIT_BREAKER_STATE",
+    "RAG_REQUESTS",
+    "RAG_REQUEST_DURATION",
+]

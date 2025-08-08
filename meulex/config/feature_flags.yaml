@@ -1,0 +1,56 @@
+# Feature Flags Configuration for Meulex
+# These flags control optional features and experimental functionality
+
+# Retrieval Features
+retrieval:
+  hybrid_retrieval: true
+  sparse_retrieval: true
+  reranker: false
+  semantic_cache: true
+  mmr_diversity: false
+
+# LLM Features
+llm:
+  streaming: false
+  cascade_fallback: true
+  budget_enforcement: true
+  token_counting: true
+  response_caching: true
+
+# Observability Features
+observability:
+  metrics: true
+  tracing: true
+  langfuse: false
+  detailed_logging: true
+  performance_monitoring: true
+
+# Security Features
+security:
+  pii_masking: true
+  input_sanitization: true
+  rate_limiting: true
+  circuit_breaker: true
+  request_validation: true
+
+# Integration Features
+integrations:
+  slack_events: true
+  slack_slash_commands: true
+  webhook_verification: true
+  idempotency_checks: true
+
+# Development Features
+development:
+  mock_providers: false
+  debug_endpoints: false
+  test_mode: false
+  verbose_errors: false
+
+# Experimental Features
+experimental:
+  advanced_chunking: false
+  multi_modal: false
+  tool_calling: false
+  agent_workflows: false
+  custom_scorers: false
