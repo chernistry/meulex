@@ -1,5 +1,7 @@
 # Meulex
 
+<img src="assets/avatar.png" alt="Meulex avatar" width="50" height="50" style="border-radius:8px;" />
+
 _heb. 'meule' (מעולה) — 'excellent'_
 
 > Compliance‑aware, Slack‑native agentic RAG copilot boilerplate
@@ -234,6 +236,56 @@ meulex ingest_directory ./test_data/
 ```
 
 > Slack setup: see detailed step-by-step guide in `docs/setup_slack.md`.
+
+### Ingesting Documents
+
+You can ingest files in three ways. Pick what fits your setup.
+
+1) Via API (no container access required)
+
+```bash
+for f in /Users/sasha/IdeaProjects/meulex/test_data/*; do \
+  jq -Rs --arg id "$(basename "$f")" '{id:$id, content:., metadata:{source:$id}}' "$f" \
+  | curl -sS -X POST http://localhost:8000/embed \
+    -H 'Content-Type: application/json' -d @-; echo; \
+done
+```
+
+2) CLI from host (when Qdrant port is reachable)
+
+```bash
+export QDRANT_URL=http://localhost:6333
+meulex ingest_directory /Users/sasha/IdeaProjects/meulex/test_data --collection meulex_docs
+```
+
+3) Inside container (service `meulex-api`)
+
+```bash
+CID=$(docker compose ps -q meulex-api)
+docker cp /Users/sasha/IdeaProjects/meulex/test_data "$CID":/app/test_data
+docker compose exec meulex-api sh -lc \
+  "python -m meulex.cli.main ingest_directory /app/test_data --collection meulex_docs"
+```
+
+Verify ingestion and retrieval:
+
+```bash
+curl -s http://localhost:8000/health | jq .
+curl -s -X POST http://localhost:8000/chat -H 'Content-Type: application/json' \
+  -d '{"question":"What is Meulex?"}' | jq .
+```
+
+---
+
+## Screenshots
+
+<p>
+  <img src="assets/helpmessage.png" alt="Slack help message" width="560" />
+</p>
+
+<p>
+  <img src="assets/reply.png" alt="Slack reply example" width="560" />
+</p>
 
 ### CLI (Typer)
 
