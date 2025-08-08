@@ -1,37 +1,42 @@
-# Core web framework
+# === Core Web Framework ===
 fastapi>=0.115.0
+starlette==0.47.2
 uvicorn[standard]>=0.32.0
 python-multipart>=0.0.17
 jinja2>=3.1.4
 
-# Data validation and settings
-pydantic>=2.10.0
-pydantic-settings>=2.6.0
+# === Data Validation & Settings ===
+pydantic>=2.11.7
+pydantic-settings>=2.10.0
 
-# HTTP client
-httpx>=0.28.0
+# === HTTP Client ===
+httpx>=0.28.1
 
-# Database and caching
-redis>=5.2.0
-qdrant-client>=1.15.0
+# === Database & Caching ===
+redis>=6.4.0
+qdrant-client>=1.15.1
 
-# LLM providers
+# === LLM Providers ===
 openai>=1.58.0
+tiktoken>=0.9.0
 
-# Utilities
-tenacity>=9.0.0
-typer>=0.15.0
+# === Utilities ===
+tenacity>=9.1.2
+typer>=0.16.0
 rich>=13.9.0
 
-# Monitoring and observability
-prometheus-client>=0.21.0
-opentelemetry-api>=1.36.0
-opentelemetry-sdk>=1.36.0
+# === Monitoring & Observability ===
+prometheus-client>=0.22.1
+opentelemetry-api>=1.26.0,<2.0.0
+opentelemetry-sdk>=1.26.0,<2.0.0
 opentelemetry-instrumentation-fastapi>=0.47b0
 opentelemetry-instrumentation-httpx>=0.47b0
 opentelemetry-instrumentation-redis>=0.47b0
 opentelemetry-exporter-prometheus>=0.47b0
 
-# Scientific computing
+# === Scientific Computing ===
 numpy>=2.0.0
 scikit-learn>=1.5.0
+
+# === Testing ===
+pytest==8.4.1

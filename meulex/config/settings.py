@@ -126,22 +126,6 @@ class Settings(BaseSettings):
     reranker_top_k: int = Field(default=5, description="Reranker top-k")
     
     # =============================================================================
-    # Slack Integration
-    # =============================================================================
-    slack_bot_token: Optional[str] = Field(
-        default=None, description="Slack bot token"
-    )
-    slack_signing_secret: Optional[str] = Field(
-        default=None, description="Slack signing secret"
-    )
-    slack_app_token: Optional[str] = Field(
-        default=None, description="Slack app token"
-    )
-    slack_verification_token: Optional[str] = Field(
-        default=None, description="Slack verification token"
-    )
-    
-    # =============================================================================
     # Security Configuration
     # =============================================================================
     rate_limits_enabled: bool = Field(

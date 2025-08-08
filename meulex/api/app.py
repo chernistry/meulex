@@ -260,8 +260,16 @@ async def meulex_exception_handler(request: Request, exc: MeulexException):
     request_id = getattr(request.state, "request_id", None)
     error_response = to_error_response(exc, request_id)
     
+    # Ensure status_code is an integer
+    status_code = exc.status_code
+    if isinstance(status_code, str):
+        try:
+            status_code = int(status_code)
+        except (ValueError, TypeError):
+            status_code = 500
+    
     return JSONResponse(
-        status_code=exc.status_code,
+        status_code=status_code,
         content=error_response
     )
 
@@ -276,7 +284,6 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         content={
             "error_code": "HTTP_ERROR",
             "message": exc.detail,
-            "status_code": exc.status_code,
             "details": {},
             "request_id": request_id
         }

@@ -52,7 +52,7 @@ def create_llm_provider(settings: Settings, provider_name: Optional[str] = None)
             extra={
                 "provider": provider_name,
                 "model": provider.default_model,
-                "name": provider.name
+                "provider_name": provider.name
             }
         )
         return provider

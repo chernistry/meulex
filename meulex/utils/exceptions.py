@@ -214,7 +214,6 @@ def to_error_response(
         return {
             "error_code": exception.error_code,
             "message": exception.message,
-            "status_code": exception.status_code,
             "details": exception.details,
             "request_id": request_id
         }

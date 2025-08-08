@@ -152,12 +152,17 @@ async def slack_events(request: Request) -> Dict[str, Any]:
                     detail="Missing required Slack headers"
                 )
             
-            # Verify signature
-            try:
-                signature_verifier.verify_signature(timestamp, body, signature)
-            except AuthenticationError as e:
-                logger.warning(f"Slack signature verification failed: {e}")
-                raise HTTPException(status_code=401, detail="Invalid signature")
+            # Verify signature (can be disabled for debugging)
+            settings = get_settings()
+            if settings.slack_signature_verification_enabled:
+                try:
+                    signature_verifier.verify_signature(timestamp, body, signature)
+                    logger.debug("Slack signature verification successful")
+                except AuthenticationError as e:
+                    logger.warning(f"Slack signature verification failed: {e}")
+                    raise HTTPException(status_code=401, detail="Invalid signature")
+            else:
+                logger.warning("Slack signature verification is DISABLED - only use for debugging!")
             
             # Parse payload
             try:
@@ -191,11 +196,15 @@ async def slack_events(request: Request) -> Dict[str, Any]:
             # For event callbacks, we need to respond quickly (within 3 seconds)
             # and then optionally send a response via the Slack API
             if payload.type == "event_callback":
+                logger.debug(f"Processing event_callback: {payload.event.type if payload.event else 'no event'}")
+                
                 # Send immediate acknowledgment
                 ack_response = {"status": "ok"}
+                logger.debug("Sending ACK response to Slack")
                 
                 # If we have a response to send, send it asynchronously
                 if response and payload.event:
+                    logger.debug(f"Scheduling async response to channel {payload.event.channel}")
                     # Don't await this - send it in the background
                     import asyncio
                     asyncio.create_task(
@@ -205,6 +214,8 @@ async def slack_events(request: Request) -> Dict[str, Any]:
                             payload.event.thread_ts
                         )
                     )
+                else:
+                    logger.debug("No response to send or no event data")
                 
                 span.set_attribute("success", True)
                 return ack_response

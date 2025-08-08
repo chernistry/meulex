@@ -46,7 +46,8 @@ def create_reranker(settings: Settings, reranker_name: Optional[str] = None) -> 
         raise MeulexException(
             f"Unsupported reranker: {reranker_name}. Available: {available}",
             "RERANKER_ERROR",
-            "factory"
+            500,
+            {"available_rerankers": list(RERANKER_REGISTRY.keys())}
         )
     
     reranker_class = RERANKER_REGISTRY[reranker_name]
@@ -57,7 +58,7 @@ def create_reranker(settings: Settings, reranker_name: Optional[str] = None) -> 
             f"Created reranker: {reranker_name}",
             extra={
                 "reranker": reranker_name,
-                "name": reranker.name
+                "reranker_name": reranker.name
             }
         )
         return reranker
@@ -67,7 +68,7 @@ def create_reranker(settings: Settings, reranker_name: Optional[str] = None) -> 
         raise MeulexException(
             f"Failed to create reranker {reranker_name}",
             "RERANKER_ERROR",
-            "factory",
+            500,
             {"error": str(e), "reranker": reranker_name}
         )
 
