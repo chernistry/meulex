@@ -88,8 +88,7 @@ class JinaEmbedder(BaseEmbedder):
             try:
                 payload = {
                     "model": self.model,
-                    "input": texts,
-                    "encoding_format": "float"
+                    "input": texts
                 }
                 
                 response = await self.client.post("/embeddings", json=payload)

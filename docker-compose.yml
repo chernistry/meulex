@@ -8,33 +8,12 @@ services:
       target: production
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
-      # Core settings
-      - LOG_LEVEL=INFO
-      - ENVIRONMENT=production
-      
-      # Database connections
+      # Override specific settings for Docker
       - QDRANT_URL=http://qdrant:6333
       - REDIS_URL=redis://redis:6379
-      
-      # Enable features
-      - ENABLE_CACHE=true
-      - ENABLE_SPARSE_RETRIEVAL=true
-      - ENABLE_RERANKER=true
-      - ENABLE_RATE_LIMITING=true
-      - ENABLE_SECURITY_HEADERS=true
-      - ENABLE_LOG_SANITIZATION=true
-      
-      # Mock providers for demo (replace with real keys)
-      - USE_MOCK_EMBEDDINGS=true
-      - USE_MOCK_LLM=true
-      
-      # Uncomment and set for production
-      # - OPENAI_API_KEY=${OPENAI_API_KEY}
-      # - JINA_API_KEY=${JINA_API_KEY}
-      # - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
-      # - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
-      # - METRICS_TOKEN=${METRICS_TOKEN}
     
     depends_on:
       - qdrant

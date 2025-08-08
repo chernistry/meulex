@@ -57,13 +57,7 @@ class SlackSignatureVerifier:
             
             if abs(current_timestamp - request_timestamp) > self.request_timeout:
                 raise AuthenticationError(
-                    "Request timestamp too old",
-                    "slack_auth",
-                    {
-                        "request_timestamp": request_timestamp,
-                        "current_timestamp": current_timestamp,
-                        "max_age": self.request_timeout
-                    }
+                    f"Request timestamp too old: {current_timestamp - request_timestamp}s > {self.request_timeout}s"
                 )
             
             # Create signature base string
@@ -78,28 +72,16 @@ class SlackSignatureVerifier:
             
             # Compare signatures using constant-time comparison
             if not hmac.compare_digest(expected_signature, signature):
-                raise AuthenticationError(
-                    "Invalid signature",
-                    "slack_auth",
-                    {"expected_prefix": expected_signature[:10]}
-                )
+                raise AuthenticationError("Invalid signature")
             
             logger.debug("Slack signature verified successfully")
             return True
             
         except ValueError as e:
-            raise AuthenticationError(
-                f"Invalid timestamp format: {e}",
-                "slack_auth",
-                {"timestamp": timestamp}
-            )
+            raise AuthenticationError(f"Invalid timestamp format: {e}")
         except Exception as e:
             logger.error(f"Signature verification failed: {e}")
-            raise AuthenticationError(
-                "Signature verification failed",
-                "slack_auth",
-                {"error": str(e)}
-            )
+            raise AuthenticationError("Signature verification failed")
     
     def extract_headers(self, headers: dict) -> tuple[Optional[str], Optional[str]]:
         """Extract Slack headers from request.

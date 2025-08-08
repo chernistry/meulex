@@ -47,14 +47,15 @@ def create_llm_provider(settings: Settings, provider_name: Optional[str] = None)
     
     try:
         provider = provider_class(settings)
-        logger.info(
-            f"Created LLM provider: {provider_name}",
-            extra={
-                "provider": provider_name,
-                "model": provider.default_model,
-                "provider_name": provider.name
-            }
-        )
+        # logger.info(
+        #     f"Created LLM provider: {provider_name}",
+        #     extra={
+        #         "provider": provider_name,
+        #         "model": provider.default_model,
+        #         "provider_name": provider.name
+        #     }
+        # )
+        logger.info(f"Created LLM provider: {provider_name} with model: {provider.default_model}")
         return provider
         
     except Exception as e:

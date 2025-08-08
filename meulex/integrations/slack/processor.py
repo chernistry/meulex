@@ -187,7 +187,7 @@ class SlackEventProcessor:
         
         # Skip bot messages
         if event.user == self.bot_user_id:
-            logger.debug("Ignoring bot message")
+            logger.debug(f"Ignoring bot message from user {event.user} (bot_user_id: {self.bot_user_id})")
             return None
         
         span.set_attribute("user_id", event.user)
@@ -401,7 +401,11 @@ class SlackEventProcessor:
                     return True
                 else:
                     error = result.get("error", "Unknown error")
-                    logger.error(f"Slack API error: {error}")
+                    logger.error(f"Slack API error: {error}", extra={
+                        "channel": channel,
+                        "slack_error": error,
+                        "full_response": result
+                    })
                     span.set_attribute("slack_error", error)
                     return False
                     
