@@ -1,7 +1,7 @@
 """LLM factory for creating provider instances."""
 
 import logging
-from typing import Dict, Type
+from typing import Dict, Optional, Type
 
 from meulex.config.settings import Settings
 from meulex.llm.base import BaseLLMProvider

@@ -11,9 +11,12 @@ from pydantic import BaseModel, Field, validator
 
 from meulex.config.settings import get_settings
 from meulex.core.embeddings.factory import create_embedder
-from meulex.core.retrieval.dense import DenseRetriever
+from meulex.core.retrieval.hybrid import HybridRetriever
 from meulex.core.vector.base import Document
 from meulex.core.vector.qdrant_store import QdrantStore
+from meulex.llm.base import ChatMessage as LLMChatMessage, LLMMode, MessageRole
+from meulex.llm.cascade import LLMCascade
+from meulex.llm.prompt_builder import RAGPromptBuilder
 from meulex.observability import RAG_REQUESTS, RAG_REQUEST_DURATION, get_tracer
 from meulex.utils.exceptions import MeulexException
 from meulex.utils.security import sanitize_html, validate_input_length
@@ -26,6 +29,8 @@ router = APIRouter()
 embedder = None
 vector_store = None
 retriever = None
+llm_cascade = None
+prompt_builder = None
 
 
 class ChatMessage(BaseModel):
@@ -55,12 +60,26 @@ class ChatRequest(BaseModel):
         ge=0.0,
         le=2.0
     )
+    mode: Optional[str] = Field(
+        None,
+        description="Generation mode (balanced, creative, precise)"
+    )
     
     @validator("question")
     def validate_question(cls, v: str) -> str:
         """Validate question field."""
         validate_input_length(v, min_length=1, max_length=2000, field_name="question")
         return sanitize_html(v)
+    
+    @validator("mode")
+    def validate_mode(cls, v: Optional[str]) -> Optional[str]:
+        """Validate mode field."""
+        if v is not None:
+            valid_modes = ["balanced", "creative", "precise"]
+            if v.lower() not in valid_modes:
+                raise ValueError(f"Invalid mode. Must be one of: {valid_modes}")
+            return v.lower()
+        return v
 
 
 class SourceDocument(BaseModel):
@@ -85,59 +104,44 @@ class ChatResponse(BaseModel):
 
 async def initialize_chat_components():
     """Initialize components for chat endpoint."""
-    global embedder, vector_store, retriever
+    global embedder, vector_store, retriever, llm_cascade, prompt_builder
     
     if retriever is None:
         settings = get_settings()
+        
+        # Initialize embedder and vector store
         embedder = create_embedder(settings)
         vector_store = QdrantStore(settings)
         await vector_store.create_collection()
-        retriever = DenseRetriever(embedder, vector_store, settings)
         
-        logger.info("Chat endpoint components initialized")
-
-
-def generate_simple_answer(query: str, documents: List[Document]) -> str:
-    """Generate a simple answer from retrieved documents.
-    
-    This is a placeholder implementation. In a full system, this would
-    use an LLM to generate a proper answer.
-    
-    Args:
-        query: User query
-        documents: Retrieved documents
+        # Initialize hybrid retriever
+        retriever = HybridRetriever(embedder, vector_store, settings)
         
-    Returns:
-        Generated answer
-    """
-    if not documents:
-        return "I couldn't find any relevant information to answer your question."
-    
-    # Simple answer generation based on document content
-    answer_parts = [
-        f"Based on the available information, here's what I found about '{query}':",
-        ""
-    ]
-    
-    for i, doc in enumerate(documents[:3], 1):
-        # Take first sentence or first 200 characters
-        content = doc.content.strip()
-        if '.' in content:
-            first_sentence = content.split('.')[0] + '.'
-        else:
-            first_sentence = content[:200] + "..." if len(content) > 200 else content
+        # Load existing documents into sparse index if enabled
+        if settings.enable_sparse_retrieval:
+            try:
+                # Get all documents from vector store for sparse indexing
+                # This is a simplified approach - in production, you'd want a more efficient method
+                collection_info = await vector_store.get_collection_info()
+                if collection_info.get("points_count", 0) > 0:
+                    # For now, we'll skip pre-loading documents into sparse index
+                    # In a full implementation, you'd retrieve all documents and add them
+                    logger.info("Sparse retrieval enabled but document pre-loading skipped")
+            except Exception as e:
+                logger.warning(f"Failed to pre-load documents for sparse retrieval: {e}")
         
-        answer_parts.append(f"{i}. {first_sentence}")
-    
-    if len(documents) > 3:
-        answer_parts.append(f"\n(Found {len(documents)} total relevant documents)")
-    
-    return "\n".join(answer_parts)
+        # Initialize LLM cascade
+        llm_cascade = LLMCascade(settings)
+        
+        # Initialize prompt builder
+        prompt_builder = RAGPromptBuilder(max_context_tokens=settings.max_tokens // 2)
+        
+        logger.info("Chat endpoint components initialized with hybrid retrieval and LLM cascade")
 
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, req: Request) -> ChatResponse:
-    """Process a chat query using RAG.
+    """Process a chat query using RAG with LLM cascade.
     
     Args:
         request: Chat request
@@ -159,8 +163,14 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
             await initialize_chat_components()
             
             # Set defaults
-            top_k = request.top_k or get_settings().default_top_k
-            temperature = request.temperature or get_settings().temperature
+            settings = get_settings()
+            top_k = request.top_k or settings.default_top_k
+            temperature = request.temperature or settings.temperature
+            mode = LLMMode(request.mode or "balanced")
+            
+            span.set_attribute("top_k", top_k)
+            span.set_attribute("temperature", temperature)
+            span.set_attribute("mode", mode.value)
             
             # Retrieve relevant documents
             documents = await retriever.retrieve(
@@ -168,14 +178,47 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
                 top_k=top_k
             )
             
-            # Generate answer (placeholder implementation)
-            answer = generate_simple_answer(request.question, documents)
+            span.set_attribute("documents_retrieved", len(documents))
+            
+            # Convert chat history to LLM format
+            llm_history = []
+            for msg in request.history:
+                try:
+                    role = MessageRole(msg.role.lower())
+                    llm_history.append(LLMChatMessage(role=role, content=msg.content))
+                except ValueError:
+                    # Skip invalid roles
+                    continue
+            
+            # Build prompt with retrieved context
+            messages = prompt_builder.build_rag_prompt(
+                question=request.question,
+                documents=documents,
+                conversation_history=llm_history,
+                mode=mode
+            )
+            
+            # Generate response using LLM cascade
+            llm_response = await llm_cascade.chat_completion(
+                messages=messages,
+                temperature=temperature,
+                max_tokens=settings.max_tokens,
+                stream=False  # For now, disable streaming
+            )
+            
+            # Extract answer
+            answer = llm_response.content
             
             # Prepare source documents
             sources = []
             for doc in documents:
+                # Truncate content for response
+                content = doc.content
+                if len(content) > 500:
+                    content = content[:500] + "..."
+                
                 source_doc = SourceDocument(
-                    text=doc.content[:500] + "..." if len(doc.content) > 500 else doc.content,
+                    text=content,
                     source=doc.metadata.get("source", "unknown"),
                     score=doc.score or 0.0,
                     metadata=doc.metadata
@@ -187,11 +230,16 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
             metadata = {
                 "query_id": request_id,
                 "processing_time": round(processing_time, 3),
-                "model_used": "simple-rag",  # Placeholder
+                "model_used": llm_response.model,
                 "retrieval_stats": {
                     "documents_found": len(documents),
                     "top_k_requested": top_k,
-                    "reranked": False
+                    "retrieval_method": "hybrid" if settings.enable_hybrid_retrieval else "dense"
+                },
+                "llm_stats": {
+                    "usage": llm_response.usage.dict() if llm_response.usage else None,
+                    "finish_reason": llm_response.finish_reason,
+                    "estimated_cost_cents": llm_response.metadata.get("estimated_cost_cents", 0.0)
                 },
                 "success": True
             }
@@ -205,24 +253,27 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
             # Record metrics
             RAG_REQUESTS.labels(
                 status="success",
-                provider="simple-rag"
+                provider=llm_response.metadata.get("provider", "unknown")
             ).inc()
             
             RAG_REQUEST_DURATION.observe(processing_time)
             
             logger.info(
-                f"Chat query processed: {len(documents)} docs retrieved",
+                f"Chat query processed: {len(documents)} docs retrieved, {llm_response.usage.total_tokens if llm_response.usage else 0} tokens",
                 extra={
                     "request_id": request_id,
                     "question_length": len(request.question),
                     "documents_found": len(documents),
-                    "processing_time": processing_time
+                    "processing_time": processing_time,
+                    "model_used": llm_response.model,
+                    "total_tokens": llm_response.usage.total_tokens if llm_response.usage else 0
                 }
             )
             
             span.set_attribute("success", True)
             span.set_attribute("documents_found", len(documents))
             span.set_attribute("processing_time", processing_time)
+            span.set_attribute("model_used", llm_response.model)
             
             return response
             
@@ -230,7 +281,7 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
             # Record error metrics
             RAG_REQUESTS.labels(
                 status="error",
-                provider="simple-rag"
+                provider="unknown"
             ).inc()
             raise
         except Exception as e:
@@ -240,7 +291,7 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
             # Record error metrics
             RAG_REQUESTS.labels(
                 status="error",
-                provider="simple-rag"
+                provider="unknown"
             ).inc()
             
             raise HTTPException(status_code=500, detail="Internal server error")
@@ -248,9 +299,11 @@ async def chat(request: ChatRequest, req: Request) -> ChatResponse:
 
 async def cleanup_chat_components():
     """Cleanup chat endpoint components."""
-    global embedder, vector_store, retriever
+    global embedder, vector_store, retriever, llm_cascade, prompt_builder
     
     try:
+        if llm_cascade:
+            await llm_cascade.close()
         if retriever:
             await retriever.close()
         if vector_store:
