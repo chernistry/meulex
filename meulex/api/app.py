@@ -20,6 +20,11 @@ from meulex.observability import (
     instrument_fastapi,
     setup_observability,
 )
+from meulex.security.middleware import (
+    LogSanitizerMiddleware,
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
 from meulex.utils.exceptions import MeulexException, to_error_response
 from meulex.utils.security import generate_request_id, get_security_headers
 
@@ -212,6 +217,16 @@ app = FastAPI(
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None,
 )
+
+# Add security middleware
+if settings.enable_log_sanitization:
+    app.add_middleware(LogSanitizerMiddleware, settings=settings)
+
+if settings.enable_rate_limiting:
+    app.add_middleware(RateLimitMiddleware, settings=settings)
+
+if settings.enable_security_headers:
+    app.add_middleware(SecurityHeadersMiddleware, settings=settings)
 
 # Add CORS middleware
 app.add_middleware(

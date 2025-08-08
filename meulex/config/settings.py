@@ -52,8 +52,8 @@ class Settings(BaseSettings):
     max_tokens: int = Field(default=2048, description="Maximum tokens per request")
     request_timeout_s: int = Field(default=30, description="Request timeout in seconds")
     retry_attempts: int = Field(default=3, description="Number of retry attempts")
-    cost_budget_cents: int = Field(
-        default=1000, description="Cost budget in cents per request"
+    cost_budget_cents: float = Field(
+        default=1000.0, description="Cost budget in cents per request"
     )
     temperature: float = Field(default=0.7, description="LLM temperature")
     
@@ -206,6 +206,14 @@ class Settings(BaseSettings):
     enable_log_sanitization: bool = Field(
         default=True, description="Enable log sanitization"
     )
+    
+    # =============================================================================
+    # Security Settings
+    # =============================================================================
+    enable_rate_limiting: bool = Field(default=True, description="Enable rate limiting")
+    enable_security_headers: bool = Field(default=True, description="Enable security headers")
+    enable_log_sanitization: bool = Field(default=True, description="Enable log sanitization")
+    metrics_token: Optional[str] = Field(None, description="Token to protect metrics endpoint")
     
     # =============================================================================
     # Slack Integration

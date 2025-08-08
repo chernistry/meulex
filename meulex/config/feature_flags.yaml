@@ -2,55 +2,95 @@
 # These flags control optional features and experimental functionality
 
 # Retrieval Features
+# Hybrid dense+sparse retrieval, RRF fusion, optional rerankers and caches
 retrieval:
-  hybrid_retrieval: true
-  sparse_retrieval: true
-  reranker: false
-  semantic_cache: true
-  mmr_diversity: false
+  hybrid_retrieval: true        # Use HybridRetriever (dense+sparse+RRF)
+                                # impl: core/retrieval/hybrid.py, api/app.py
+  sparse_retrieval: true        # Enable BM25/Pyserini alongside dense
+                                # impl: core/retrieval/{sparse.py, hybrid.py}
+  reranker: false               # Post-retrieval reranking (keyword/mock/Jina)
+                                # impl: core/reranking/{factory.py, simple.py}
+  semantic_cache: true          # Cache /chat answers by semantic key
+                                # impl: core/caching/cache_manager.py, routes/chat.py
+  mmr_diversity: false          # Diversify selected docs via MMR
+                                # hook: selection stage in hybrid pipeline
 
 # LLM Features
+# Streaming, cascade fallback, budgets, and response caching
 llm:
-  streaming: false
-  cascade_fallback: true
-  budget_enforcement: true
-  token_counting: true
-  response_caching: true
+  streaming: false              # Stream model tokens to client
+                                # impl: llm/providers/openai.py (stream paths)
+  cascade_fallback: true        # Primary→fallback on failure (CB+retry)
+                                # impl: llm/cascade.py
+  budget_enforcement: true      # Enforce token/cost budgets per request
+                                # impl: llm/cascade.py, providers/openai.py
+  token_counting: true          # Record prompt/completion tokens
+                                # impl: providers/openai.py, observability/otel.py
+  response_caching: true        # Cache LLM responses (separate from semantic)
+                                # impl: llm/cascade.py (enable reuse)
 
 # Observability Features
+# Prometheus metrics, OpenTelemetry tracing, logging detail and perf
 observability:
-  metrics: true
-  tracing: true
-  langfuse: false
-  detailed_logging: true
-  performance_monitoring: true
+  metrics: true                 # Enable Prometheus metrics and /metrics endpoint
+                                # impl: observability/otel.py, api/app.py
+  tracing: true                 # Enable OpenTelemetry tracing
+                                # impl: observability/otel.py
+  langfuse: false               # Export traces to Langfuse (optional)
+                                # impl: observability/otel.py (extend exporter)
+  detailed_logging: true        # Add context-rich structured logs
+                                # impl: throughout api/ llm/ core/ modules
+  performance_monitoring: true  # Histograms/gauges for perf KPIs
+                                # impl: observability/otel.py + call sites
 
 # Security Features
+# PII masking, input sanitization, rate limits, circuit breakers
 security:
-  pii_masking: true
-  input_sanitization: true
-  rate_limiting: true
-  circuit_breaker: true
-  request_validation: true
+  pii_masking: true             # Mask PII in outputs/logs
+                                # impl: utils/security.py, routes/chat.py
+  input_sanitization: true      # Sanitize/validate inbound payloads
+                                # impl: pydantic models, utils/security.py
+  rate_limiting: true           # Per-endpoint rate limiter (Redis/in-memory)
+                                # impl: api/app.py middleware
+  circuit_breaker: true         # Circuit breakers around providers
+                                # impl: llm/cascade.py (+ tests)
+  request_validation: true      # Strict request schemas and error shaping
+                                # impl: api/routes/{chat.py, embed.py}
 
 # Integration Features
+# Slack Events/Slash, webhook verify, idempotency via cache
 integrations:
-  slack_events: true
-  slack_slash_commands: true
-  webhook_verification: true
-  idempotency_checks: true
+  slack_events: true            # Handle Slack Events API
+                                # impl: api/routes/slack.py, integrations/slack/*
+  slack_slash_commands: true    # Handle slash commands
+                                # impl: api/routes/slack.py
+  webhook_verification: true    # Verify Slack signatures/timestamps
+                                # impl: integrations/slack/auth.py
+  idempotency_checks: true      # Avoid duplicate event processing
+                                # impl: integrations/slack/processor.py (cache)
 
 # Development Features
+# Dev/test helpers, safer defaults, verbose diagnostics
 development:
-  mock_providers: false
-  debug_endpoints: false
-  test_mode: false
-  verbose_errors: false
+  mock_providers: false         # Use mock LLM/reranker for dev/tests
+                                # impl: llm/providers/openai.py, reranking/mock
+  debug_endpoints: false        # Expose extra debug routes
+                                # impl: api/app.py (add when enabled)
+  test_mode: false              # Deterministic behavior for tests
+                                # impl: providers/pipeline where applicable
+  verbose_errors: false         # Return richer errors in dev
+                                # impl: api/app.py, utils/exceptions.py
 
 # Experimental Features
+# Opt-in capabilities for future expansion
 experimental:
-  advanced_chunking: false
-  multi_modal: false
-  tool_calling: false
-  agent_workflows: false
-  custom_scorers: false
+  advanced_chunking: false      # Header/table-aware chunkers
+                                # impl: core/chunking/text_splitter.py (extend)
+  multi_modal: false            # Images/screenshots support
+                                # impl: api/routes/chat.py + embedder/provider
+  tool_calling: false           # Agent tool calls (MCP)
+                                # impl: orchestrator + security/policy gating
+  agent_workflows: false        # Multi-agent graphs
+                                # impl: orchestrator/graphs (LangGraph)
+  custom_scorers: false         # Pluggable retrieval scorers
+                                # impl: core/retrieval (scorers & factory)
